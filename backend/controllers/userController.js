@@ -1,9 +1,9 @@
 const { authMiddleware } = require("../middleware");
-const { User } = require("../db");
+const { User, Account } = require("../db");
 const { signUpBodyZodSchema, signInBodyZodSchema, updateBodyZodSchema } = require("../zodValidatoin");
 require("dotenv").config()
 const jwt = require("jsonwebtoken");
-const becrypt = require("bcrypt");
+const bcrypt = require("bcrypt");
 const saltRounds = 10;
 
 /* //GET ALL USERS
@@ -32,15 +32,23 @@ const signUp = async (req,res,next)=>{
         return res.status(411).json({messege:"user already exist please login"})
     }
 
-    const hashedPassword = becrypt.hashSync(req.body.password,saltRounds)
-   await User.create({
+    const hashedPassword = bcrypt.hashSync(req.body.password,saltRounds)
+   const newUser = await User.create({
         username:req.body.username,
         password:hashedPassword,
         firstName:req.body.firstName,
         lastName:req.body.lastName
     })
-
-    const userId = User._id;
+    const userId = newUser._id;
+    await Account.create({
+        userId:userId,
+        balance:(1+Math.random()*100000).toFixed(2)
+    })
+    try {
+        await newUser.save()
+    } catch (error) {
+        res.status(400).json({messege:"error in database while creating user"})
+    }
     const token = jwt.sign({userId},process.env.JWT_SECRET);
     
 
@@ -52,33 +60,27 @@ const signUp = async (req,res,next)=>{
 
 //SIGN IN
 const signIn = async (req,res,next)=>{
-    const {success} = signInBodyZodSchema.safeParse(req.body)
-    if(success.false){
-        return res.status(411).json({messege:"wrong credentials"})
+    const parsed = signInBodyZodSchema.safeParse(req.body);
+    if (!parsed.success) {
+        return res.status(411).json({ message: "wrong credentials" });
     }
-    let isUserExist;
-    try {
-        isUserExist = await User.find({
-            username:req.body.username
-        })
-    } catch (error) {
-        return res.status(411).json(error)
-    }
-    const password = req.body.password;
-    const isPasswordCorrect = becrypt.compareSync(password,isUserExist.password);
 
+    let user;
+    try {
+        user = await User.findOne({ username: req.body.username });
+        if (!user) {
+            return res.status(411).json({ message: "user not found" });
+        }
+    } catch (error) {
+        return res.status(500).json({ message: "server error" });
+    }
+    const isPasswordCorrect = bcrypt.compareSync(req.body.password,user.password)
     if(isPasswordCorrect){
-        const user = await User.findOne({
-            username:req.body.username,
-            password:req.body.password
-        })
-        if(user){
             const token = jwt.sign({userId:user._id},process.env.JWT_SECRET)
             res.json({token:token})
             return;
-        } 
-        return res.status(411).json({messege:"error while logging in"})
     }
+    return res.status(411).json({messege:"error while logging in"})
 
 }
 
@@ -96,11 +98,11 @@ const updateUser = async (req,res,next)=>{
 }
 
 //get BULK users
-
-const getBulk = async(authMiddleware,req,res)=>{
+const getBulk = async(req,res)=>{
     //  LIKE IN SQL 
-    const filter = req.query.filter || "";
+    const filter = (req.query.filter || "").toLowerCase();
     const users = await User.find({
+        //or is for multiple query at same time
         $or:[{
             firstName:{
                 "$regex":filter
@@ -125,3 +127,7 @@ module.exports = {
     updateUser,
     getBulk
 }
+
+
+
+

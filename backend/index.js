@@ -14,9 +14,9 @@ app.use(cors());
 
 dbConnection();
 app.use("/api/v1/user",userRouter);
-app.use("api/v1/account",accountRouter)
-app.use((err,req,res)=>{
-    res.status(500).send("somthing broke!")
+app.use("/api/v1/account",accountRouter)
+app.use((err,req,res,next)=>{
+    return res.status(500).json({messege:"somthing broke!"})
 })
 app.listen(PORT,()=>{
     console.log(`server running at ${PORT}`)

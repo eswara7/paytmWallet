@@ -7,7 +7,7 @@ userRouter.post("/signup",signUp)
 //userRouter.get("/users",getUsers)
 userRouter.post("/signin",signIn)
 userRouter.put("/update",authMiddleware,updateUser)
-userRouter.get("/bulk",getBulk)
+userRouter.get("/bulk",authMiddleware,getBulk)
 
 module.exports = {
     userRouter
